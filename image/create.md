@@ -64,7 +64,7 @@ Dockerfile 基本的語法是
 完成 Dockerfile 後可以使用 `docker build` 建立映像檔。
 
 ```
-$ sudo docker build -t="ouruser/sinatra:v2" .
+$ sudo docker build -t "ouruser/sinatra:v2" .
 Uploading context  2.56 kB
 Uploading context
 Step 0 : FROM ubuntu:14.04
