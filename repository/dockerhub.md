@@ -1,15 +1,17 @@
 ## Docker Hub
+
 目前 Docker 官方維護了一個公共倉庫 [Docker Hub](https://hub.docker.com/)，其中已經包括了超過 15,000 的映像檔。大部分需求，都可以透過在 Docker Hub 中直接下載映像檔來實作。
 
 ### 登錄
-可以透過執行 `docker login` 命令來輸入使用者名稱、密碼和電子信箱來完成註冊和登錄。
-註冊成功後，本地使用者目錄的 `.dockercfg` 中將保存使用者的認證訊息。
+
+* 可以透過執行 `docker login` 命令來輸入使用者名稱、密碼和電子信箱來完成註冊和登錄。
+* 註冊成功後，本地使用者目錄的 `.dockercfg` 中將保存使用者的認證訊息。
 
 ### 基本操作
-使用者無需登錄即可透過 `docker search` 命令來查詢官方倉庫中的映像檔，並利用 `docker pull` 命令來將它下載到本地。
 
+使用者無需登錄即可透過 `docker search` 命令來查詢官方倉庫中的映像檔，並利用 `docker pull` 命令來將它下載到本地。
 例如以 centos 為關鍵字進行搜索：
-```
+```bash
 $ sudo docker search centos
 NAME                                            DESCRIPTION                                     STARS     OFFICIAL   AUTOMATED
 centos                                          The official build of CentOS.                   465       [OK]
@@ -29,7 +31,7 @@ tutum/centos-6.4                                DEPRECATED. Use tutum/centos:6.4
 另外，在查詢的時候透過 `-s N` 參數可以指定僅顯示評價為 `N` 星以上的映像檔。
 
 下載官方 centos 映像檔到本地。
-```
+```bash
 $ sudo docker pull centos
 Pulling repository centos
 0b443ba03958: Download complete
@@ -40,6 +42,7 @@ Pulling repository centos
 使用者也可以在登錄後透過 `docker push` 命令來將映像檔推送到 Docker Hub。
 
 ### 自動建立
+
 自動建立（Automated Builds）功能對於需要經常升級映像檔內程式來說，十分方便。
 有時候，使用者建立了映像檔，安裝了某個軟體，如果軟體發布新版本則需要手動更新映像檔。。
 
