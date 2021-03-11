@@ -22,6 +22,7 @@ v0.2.9
 感謝所有的 [貢獻者](https://github.com/philipz/docker_practice/graphs/contributors)。
 
 ## 主要版本歷史
+
 * 0.3: 2014-10-TODO
     * 完成倉庫章節；
     * 重寫安全章節；
@@ -91,5 +92,6 @@ v0.2.9
 修改之後，首先 push 到你的庫，然後登錄 GitHub，在你的 repo 的首頁可以看到一個 `pull request` 按鈕，點擊它，填寫一些說明資訊，然後提交即可。
 
 ## 原出處及參考資料
+
 1. [Docker —— 从入门到实践](https://github.com/yeasy/docker_practice/)
 2. [《The Swift Programming Language­》正體中文版](https://github.com/tommy60703/the-swift-programming-language-in-traditional-chinese/)

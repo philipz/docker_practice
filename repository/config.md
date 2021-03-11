@@ -2,6 +2,7 @@
 Docker 的 Registry 利用設定檔案提供了一些倉庫的模組（flavor），使用者可以直接使用它們來進行開發或生產部署。
 
 ### 模組
+
 在 `config_sample.yml` 檔案中，可以看到一些現成的模組段：
 * `common`：基礎設定
 * `local`：儲存資料到本地檔案系統
@@ -18,13 +19,14 @@ Docker 的 Registry 利用設定檔案提供了一些倉庫的模組（flavor）
 使用者也可以新增自定義的模版段。
 
 預設情況下使用的模組是 `dev`，要使用某個模組作為預設值，可以新增 `SETTINGS_FLAVOR` 到環境變數中，例如
-```
+```bash
 export SETTINGS_FLAVOR=dev
 ```
 
 另外，設定檔案中支援從環境變數中載入值，語法格式為 `_env:VARIABLENAME[:DEFAULT]`。
 
 ### 範例設定
+
 ```
 common:
     loglevel: info

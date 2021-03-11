@@ -29,12 +29,12 @@ Docker 建立一個容器的時候，會執行以下操作：
 使用者使用 `--net=none` 後，可以自行設定網路，讓容器達到跟平常一樣具有存取網路的權限。透過這個過程，可以了解 Docker 設定網路的細節。
 
 首先，啟動一個 `/bin/bash` 容器，指定 `--net=none` 參數。
-```
+```bash
 $ sudo docker run -i -t --rm --net=none base /bin/bash
 root@63f36fc01b5f:/#
 ```
 在本地主機查找容器的程式 id，並為它建立網路命名空間。
-```
+```bash
 $ sudo docker inspect -f '{{.State.Pid}}' 63f36fc01b5f
 2778
 $ pid=2778
@@ -42,20 +42,20 @@ $ sudo mkdir -p /var/run/netns
 $ sudo ln -s /proc/$pid/ns/net /var/run/netns/$pid
 ```
 檢查橋接網卡的 IP 和子網遮罩訊息。
-```
+```bash
 $ ip addr show docker0
 21: docker0: ...
 inet 172.17.42.1/16 scope global docker0
 ...
 ```
 建立一對 “veth pair” 界面 A 和 B，綁定 A 到橋接器 `docker0`，並啟用它
-```
+```bash
 $ sudo ip link add A type veth peer name B
 $ sudo brctl addif docker0 A
 $ sudo ip link set A up
 ```
 將B放到容器的網路命名空間，命名為 eth0，啟動它並設定一個可用 IP（橋接網段）和預設網關。
-```
+```bash
 $ sudo ip link set B netns $pid
 $ sudo ip netns exec $pid ip link set dev B name eth0
 $ sudo ip netns exec $pid ip link set eth0 up
