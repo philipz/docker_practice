@@ -12,7 +12,7 @@ v0.2.9
 
 前六章為基礎內容，供使用者理解 Docker 的基本概念和操作；7 ~ 9 章介紹一些進階操作；第 10 章給出典型的應用場景和實踐案例；11 ~ 13 章介紹關於 Docker 實作的相關技術。
 
-最新版本線上閱讀：[正體版](https://www.gitbook.io/book/philipzheng/docker_practice)、[簡體版](https://www.gitbook.io/book/yeasy/docker_practice) 或 [DockerPool](http://dockerpool.com/static/books/docker_practice/index.html)。
+最新版本線上閱讀：[正體版](https://philipzheng.gitbook.io/docker_practice)、[簡體版](https://yeasy.gitbook.io/docker_practice) 或 [DockerPool](http://dockerpool.com/static/books/docker_practice/index.html)。
 
 另外，歡迎加入 [Docker.Taipei](https://www.facebook.com/groups/docker.taipei/) 和 [Meetup](http://www.meetup.com/Docker-Taipei/) ，分享 Docker 資源，交流 Docker 技術。
 
