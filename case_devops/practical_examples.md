@@ -1,0 +1,863 @@
+## 實戰案例：Go/Rust/資料庫/微服務
+
+本節透過實際專案案例演示如何為不同類型的應用建立最佳化的 Docker 映像檔，以及如何使用 Docker Compose 建立完整的開發和生產環境。
+
+### Go 應用的最小化映像檔建立
+
+Go 語言因其編譯為靜態二進位檔案和快速啟動而特別適合容器化。以下展示如何建立極小的 Go 應用映像檔。
+
+#### 超小 Go Web 服務
+
+**應用程式碼（main.go）：**
+
+```go
+package main
+
+import (
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+)
+
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprintf(w, `{"status":"healthy","version":"1.0.0"}`)
+}
+
+func helloHandler(w http.ResponseWriter, r *http.Request) {
+	hostname, _ := os.Hostname()
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprintf(w, `{"message":"Hello from %s","version":"1.0.0"}`, hostname)
+}
+
+func main() {
+	http.HandleFunc("/health", healthHandler)
+	http.HandleFunc("/hello", helloHandler)
+	http.HandleFunc("/", helloHandler)
+
+	port := ":8080"
+	log.Printf("Server starting on %s", port)
+
+	if err := http.ListenAndServe(port, nil); err != nil {
+		log.Fatalf("Server failed: %v", err)
+	}
+}
+```
+**多階段 Dockerfile：**
+
+```dockerfile
+# Stage 1: 建立階段
+FROM golang:1.26-alpine AS builder
+
+WORKDIR /build
+
+# 安裝建立依賴
+RUN apk add --no-cache git ca-certificates tzdata
+
+# 複製模組檔案（利用快取）
+COPY go.mod go.sum ./
+RUN go mod download
+
+# 複製原始碼
+COPY . .
+
+# 建立靜態二進位檔案
+# -ldflags="-w -s" 去除除錯符號減小體積
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -a -installsuffix cgo \
+    -ldflags="-w -s -X main.Version=1.0.0 -X main.BuildTime=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+    -o app .
+
+# Stage 2: 執行階段（scratch 映像檔）
+FROM scratch
+
+# 複製 CA 證書（用於 HTTPS）
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+
+# 複製時區資料（用於時間處理）
+COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+
+# 複製應用二進位檔案
+COPY --from=builder /build/app /app
+
+EXPOSE 8080
+
+# 使用絕對路徑作為 ENTRYPOINT
+ENTRYPOINT ["/app"]
+```
+**建立和測試：**
+
+```bash
+# 建立映像檔
+docker build -t go-app:latest .
+
+# 檢查映像檔大小
+docker images go-app
+
+# 執行容器
+docker run -d -p 8080:8080 --name go-demo go-app:latest
+
+# 測試應用
+curl http://localhost:8080/health | jq .
+
+# 進入容器驗證
+docker exec go-demo ls -la /
+
+# 只包含 /app 和系統必要檔案
+
+# 映像檔大小通常 < 10MB（相比 golang:1.26 基礎映像檔的 ~900MB）
+docker history go-app:latest
+```
+**go.mod 和 go.sum 示例：**
+
+```text
+module github.com/example/go-app
+
+go 1.26
+
+require (
+    // 如果需要依賴
+)
+```
+
+#### 帶依賴的 Go 應用
+
+**應用程式碼（使用 Gin 框架）：**
+
+```go
+package main
+
+import (
+	"github.com/gin-gonic/gin"
+	"log"
+)
+
+func main() {
+	router := gin.Default()
+
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"status": "ok",
+		})
+	})
+
+	router.GET("/api/users", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"users": []string{"alice", "bob"},
+		})
+	})
+
+	log.Fatal(router.Run(":8080"))
+}
+```
+**最佳化的 Dockerfile：**
+
+```dockerfile
+FROM golang:1.26-alpine AS builder
+
+WORKDIR /src
+
+RUN apk add --no-cache git ca-certificates tzdata
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -a -installsuffix cgo \
+    -ldflags="-w -s" \
+    -o app .
+
+# 最終映像檔
+FROM alpine:3.21
+
+RUN apk add --no-cache ca-certificates tzdata
+
+WORKDIR /root/
+
+COPY --from=builder /src/app .
+
+EXPOSE 8080
+
+CMD ["./app"]
+```
+
+### Rust 應用的最小化映像檔建立
+
+Rust 因其效能和安全性在系統級應用中備受青睞。
+
+**應用程式碼（main.rs）：**
+
+```rust
+use actix_web::{web, App, HttpServer, HttpResponse};
+use std::sync::Mutex;
+
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    println!("Starting server on 0.0.0.0:8080");
+
+    HttpServer::new(|| {
+        App::new()
+            .route("/health", web::get().to(health))
+            .route("/hello", web::get().to(hello))
+    })
+    .bind("0.0.0.0:8080")?
+    .run()
+    .await
+}
+
+async fn health() -> HttpResponse {
+    HttpResponse::Ok().json(serde_json::json!({
+        "status": "healthy"
+    }))
+}
+
+async fn hello() -> HttpResponse {
+    HttpResponse::Ok().json(serde_json::json!({
+        "message": "Hello from Rust"
+    }))
+}
+```
+**Cargo.toml：**
+
+```toml
+[package]
+name = "rust-app"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "rust-app"
+path = "src/main.rs"
+
+[dependencies]
+actix-web = "4.13"
+tokio = { version = "1.35", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+```
+**多階段建立 Dockerfile：**
+
+```dockerfile
+# Stage 1: 編譯
+FROM rust:1.95-alpine AS builder
+
+RUN apk add --no-cache musl-dev
+
+WORKDIR /src
+
+COPY Cargo.* ./
+COPY src ./src
+
+# 建立最佳化的發布版本
+RUN cargo build --release
+
+# Stage 2: 執行映像檔
+FROM alpine:3.21
+
+RUN apk add --no-cache ca-certificates
+
+COPY --from=builder /src/target/release/rust-app /app
+
+EXPOSE 8080
+
+CMD ["/app"]
+```
+**建立和驗證：**
+
+```bash
+docker build -t rust-app:latest .
+docker run -d -p 8080:8080 rust-app:latest
+curl http://localhost:8080/health | jq .
+
+# Rust 應用通常比 Go 更小：5-20MB（取決於依賴）
+docker images rust-app
+```
+
+### 資料庫容器化最佳實務
+
+#### PostgreSQL 生產部署
+
+**自訂 PostgreSQL 映像檔：**
+
+```dockerfile
+FROM postgres:16-alpine
+
+# 安裝額外工具
+RUN apk add --no-cache \
+    postgresql-contrib \
+    pg-stat-monitor \
+    curl
+
+# 複製初始化腳本（.sh 形式可從環境變數讀取密碼，避免在 SQL 中寫明文）
+COPY init-db.sh /docker-entrypoint-initdb.d/
+COPY health-check.sh /
+
+RUN chmod +x /health-check.sh
+
+HEALTHCHECK --interval=10s --timeout=5s --start-period=40s --retries=3 \
+    CMD /health-check.sh
+
+EXPOSE 5432
+```
+**初始化腳本（init-db.sh）：**
+
+官方映像檔會執行 `/docker-entrypoint-initdb.d/` 下的 `.sh` 腳本，因此應用使用者的密碼可以從環境變數注入，而不必寫進 SQL；資料庫 `myappdb` 已由入口腳本按 `POSTGRES_DB` 建立，初始化腳本中不要重複 `CREATE DATABASE`（否則首次初始化會因衝突而中止）。
+
+```bash
+#!/bin/bash
+set -e
+
+psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<-EOSQL
+    -- 建立應用使用者（密碼來自環境變數 APP_DB_PASSWORD）
+    CREATE USER appuser WITH PASSWORD '$APP_DB_PASSWORD';
+
+    -- 建立擴展
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    CREATE EXTENSION IF NOT EXISTS hstore;
+    CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+    -- 建立資料表
+    CREATE TABLE users (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        username VARCHAR(255) NOT NULL UNIQUE,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- 建立索引
+    CREATE INDEX idx_users_username ON users (username);
+    CREATE INDEX idx_users_email ON users (email);
+
+    -- 授予權限
+    GRANT CONNECT ON DATABASE $POSTGRES_DB TO appuser;
+    GRANT USAGE ON SCHEMA public TO appuser;
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO appuser;
+    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO appuser;
+EOSQL
+```
+**健康檢查腳本（health-check.sh）：**
+
+```bash
+#!/bin/bash
+
+PGPASSWORD=$POSTGRES_PASSWORD pg_isready \
+  -h localhost \
+  -U $POSTGRES_USER \
+  -d $POSTGRES_DB \
+  -p 5432 > /dev/null 2>&1
+
+exit $?
+```
+**Docker Compose 設定：**
+
+```yaml
+services:
+  postgres:
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
+    container_name: postgres-db
+    environment:
+      POSTGRES_DB: myappdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?set APP_DB_PASSWORD in .env}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    ports:
+      # 只暴露給本機除錯；生產環境優先不發布資料庫埠號
+      - "127.0.0.1:5432:5432"
+    networks:
+      - backend
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # 備份服務
+  backup:
+    image: postgres:16-alpine
+    depends_on:
+      - postgres
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - ./backups:/backups
+    command: |
+      sh -c 'while true; do
+        pg_dump -h postgres -U postgres -d myappdb > /backups/backup_$$(date +%Y%m%d_%H%M%S).sql
+        echo "Backup completed at $$(date)"
+        sleep 86400
+      done'
+    networks:
+      - backend
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  backend:
+    driver: bridge
+```
+**效能最佳化設定：**
+
+```yaml
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: myappdb
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=200"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "effective_cache_size=1GB"
+      - "-c"
+      - "maintenance_work_mem=64MB"
+      - "-c"
+      - "checkpoint_completion_target=0.9"
+      - "-c"
+      - "wal_buffers=16MB"
+      - "-c"
+      - "default_statistics_target=100"
+      - "-c"
+      - "random_page_cost=1.1"
+      - "-c"
+      - "effective_io_concurrency=200"
+      - "-c"
+      - "work_mem=1310kB"
+      - "-c"
+      - "min_wal_size=1GB"
+      - "-c"
+      - "max_wal_size=4GB"
+      - "-c"
+      - "max_worker_processes=4"
+      - "-c"
+      - "max_parallel_workers_per_gather=2"
+      - "-c"
+      - "max_parallel_workers=4"
+      - "-c"
+      - "max_parallel_maintenance_workers=2"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+  postgres_data:
+```
+
+#### MySQL/MariaDB 部署
+
+```dockerfile
+FROM mariadb:11
+
+# 複製自訂設定
+COPY my.cnf /etc/mysql/conf.d/custom.cnf
+
+# 初始化腳本
+COPY init.sql /docker-entrypoint-initdb.d/
+
+EXPOSE 3306
+
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+    CMD mariadb-admin ping -h localhost || exit 1
+```
+**自訂 my.cnf：**
+
+```ini
+[mysqld]
+
+# 效能最佳化
+max_connections = 200
+default_storage_engine = InnoDB
+innodb_buffer_pool_size = 1GB
+innodb_log_file_size = 256MB
+query_cache_type = 0
+query_cache_size = 0
+
+# 日誌設定
+log_error = /var/log/mysql/error.log
+slow_query_log = 1
+slow_query_log_file = /var/log/mysql/slow.log
+long_query_time = 2
+
+# 複製設定
+server_id = 1
+log_bin = mysql-bin
+binlog_format = ROW
+```
+
+#### Redis 快取部署
+
+```dockerfile
+FROM redis:8-alpine
+
+# 複製 Redis 設定
+COPY redis.conf /usr/local/etc/redis/redis.conf
+
+# 使用設定檔案啟動
+CMD ["redis-server", "/usr/local/etc/redis/redis.conf"]
+
+EXPOSE 6379
+
+# redis.conf 啟用了 requirepass，健康檢查必須帶認證，否則只會收到 NOAUTH 錯誤
+# REDISCLI_AUTH 可避免把密碼出現在程式參數中
+HEALTHCHECK --interval=5s --timeout=3s --retries=5 \
+    CMD sh -c 'REDISCLI_AUTH="$(awk "/^requirepass /{print \$2}" /usr/local/etc/redis/redis.conf)" redis-cli ping | grep -q PONG'
+```
+**redis.conf 設定：**
+
+```text
+# 綁定地址
+bind 0.0.0.0
+
+# 埠號
+port 6379
+
+# 密碼保護（示例佔位值，部署時應替換並避免提交到版本庫）
+requirepass your_secure_password
+
+# 記憶體管理
+maxmemory 512mb
+maxmemory-policy allkeys-lru
+
+# 持久化
+save 900 1
+save 300 10
+save 60 10000
+
+# AOF 持久化
+appendonly yes
+appendfsync everysec
+
+# 日誌
+loglevel notice
+logfile ""
+
+# 客戶端輸出緩衝限制
+client-output-buffer-limit normal 0 0 0
+client-output-buffer-limit replica 256mb 64mb 60
+client-output-buffer-limit pubsub 32mb 8mb 60
+```
+
+### 微服務架構的 Docker Compose 編排
+
+**三層微服務架構示例：**
+
+> 下面示例聚焦服務拓撲、網路、健康檢查和資源限制。為便於閱讀，密碼仍透過環境變數串接；生產環境應改用 Compose secrets、外部密鑰系統或雲廠商密鑰服務，並避免把敏感值寫入 `DATABASE_URL` / `REDIS_URL`。
+
+```yaml
+services:
+  # 前端服務
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      REACT_APP_API_URL: http://localhost:8000
+      NODE_ENV: production
+    depends_on:
+      - api
+    networks:
+      - frontend-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # API 服務
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://appuser:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/myappdb
+      REDIS_URL: redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD}@redis:6379
+      LOG_LEVEL: info
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - frontend-network
+      - backend-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  # PostgreSQL 資料庫
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: myappdb
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # 此處的 init.sql 只放資料表/索引等 schema 語句；
+      # 使用者與資料庫已由 POSTGRES_USER/POSTGRES_DB 建立，腳本中不要重複 CREATE USER/DATABASE
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - backend-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U appuser -d myappdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis 快取
+  redis:
+    image: redis:8-alpine
+    command: ["sh", "-c", "redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\""]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks:
+      - backend-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Nginx 反向代理
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - frontend
+      - api
+    networks:
+      - frontend-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  frontend-network:
+    driver: bridge
+  backend-network:
+    driver: bridge
+```
+**nginx.conf 設定：**
+
+```nginx
+upstream frontend {
+    server frontend:3000;
+}
+
+upstream api {
+    server api:8000;
+}
+
+server {
+    listen 80;
+    server_name localhost;
+    client_max_body_size 100M;
+
+    # 健康檢查端點
+    location /health {
+        access_log off;
+        return 200 "OK\n";
+        add_header Content-Type text/plain;
+    }
+
+    # 前端應用
+    location / {
+        proxy_pass http://frontend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # API 介面
+    location /api/ {
+        proxy_pass http://api/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_redirect off;
+
+        # WebSocket 支援
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    # 靜態資源快取
+    location ~* ^.+\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        proxy_pass http://frontend;
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+}
+```
+
+### 使用 VS Code Dev Containers
+
+Dev Containers 讓整個開發環境容器化，提升團隊一致性。
+
+**.devcontainer/devcontainer.json：**
+
+```json
+{
+  "name": "Python Dev Environment",
+  "image": "mcr.microsoft.com/devcontainers/python:3.14",
+
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/git:1": {}
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-python.pylint",
+        "charliermarsh.ruff",
+        "ms-vscode-remote.remote-containers"
+      ],
+      "settings": {
+        "python.linting.enabled": true,
+        "python.linting.pylintEnabled": true,
+        "python.formatting.provider": "black",
+        "[python]": {
+          "editor.formatOnSave": true,
+          "editor.defaultFormatter": "ms-python.python"
+        }
+      }
+    }
+  },
+
+  "postCreateCommand": "pip install -r requirements.txt && pip install pytest black pylint",
+
+  "forwardPorts": [8000, 5432, 6379],
+  "portsAttributes": {
+    "8000": {
+      "label": "Application",
+      "onAutoForward": "notify"
+    },
+    "5432": {
+      "label": "PostgreSQL",
+      "onAutoForward": "ignore"
+    },
+    "6379": {
+      "label": "Redis",
+      "onAutoForward": "ignore"
+    }
+  },
+
+  "mounts": [
+    "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,readonly"
+  ],
+
+  "remoteUser": "vscode"
+}
+```
+**.devcontainer/Dockerfile：**
+
+```dockerfile
+FROM mcr.microsoft.com/devcontainers/python:3.14
+
+# 安裝額外工具
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    redis-tools \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# 建立虛擬環境
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+WORKDIR /workspace
+```
+**Docker Compose 用於 Dev Containers：**
+
+```yaml
+# .devcontainer/docker-compose.yml
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://dev:dev@postgres:5432/myapp
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - ..:/workspace:cached
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      # 僅限本機 Dev Container 的一次性開發憑證，不要在任何共享/聯網環境複用
+      POSTGRES_USER: dev
+      POSTGRES_PASSWORD: dev
+      POSTGRES_DB: myapp
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:8-alpine
+
+volumes:
+  postgres_data:
+```

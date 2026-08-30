@@ -1,0 +1,39 @@
+
+
+services:
+
+  drone-server:
+    image: drone/drone:2.3.1
+    ports:
+      - 443:443
+      - 80:80
+    volumes:
+      - drone-data:/data:rw
+      - ./ssl:/etc/certs
+    restart: always
+    environment:
+      - DRONE_SERVER_HOST=${DRONE_SERVER_HOST:-drone.domain.com}
+      - DRONE_SERVER_PROTO=${DRONE_SERVER_PROTO:-https}
+      - DRONE_RPC_SECRET=${DRONE_RPC_SECRET:?set DRONE_RPC_SECRET}
+      - DRONE_GITHUB_SERVER=https://github.com
+      - DRONE_GITHUB_CLIENT_ID=${DRONE_GITHUB_CLIENT_ID}
+      - DRONE_GITHUB_CLIENT_SECRET=${DRONE_GITHUB_CLIENT_SECRET}
+
+  drone-agent:
+    image: drone/drone-runner-docker:1
+    restart: always
+    depends_on:
+      - drone-server
+    volumes:
+      # Trusted single-tenant demo only: Docker socket access is host-root equivalent.
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+    environment:
+      - DRONE_RPC_PROTO=http
+      - DRONE_RPC_HOST=drone-server
+      - DRONE_RPC_SECRET=${DRONE_RPC_SECRET:?set DRONE_RPC_SECRET}
+      - DRONE_RUNNER_NAME=${HOSTNAME:-demo}
+      - DRONE_RUNNER_CAPACITY=2
+    dns: 114.114.114.114
+
+volumes:
+  drone-data:

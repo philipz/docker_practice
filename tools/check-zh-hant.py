@@ -76,7 +76,7 @@ EXCLUDE_PREFIXES = (
 )
 
 # 檢查範圍：僅檢查這些章節目錄下的 .md 檔（本工作項引入的翻譯檔）。
-TARGET_DIRS = ("buildx", "compose", "dockerfile", "kubernetes", "kubernetes_setup", "etcd", "cloud", "ecosystem", "observability")
+TARGET_DIRS = ("buildx", "compose", "dockerfile", "kubernetes", "kubernetes_setup", "etcd", "cloud", "ecosystem", "observability", "security", "cases_os", "case_devops")
 
 # ---------------------------------------------------------------------------
 # 輔助函式
