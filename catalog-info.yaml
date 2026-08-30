@@ -1,0 +1,20 @@
+# Backstage catalog entry — philipz/docker_practice。
+# factory.io 三軸 annotation 為 oversight 計分輸入（docs/06 §3）：由人類宣告，
+# agent 不得修改（SR3 停手規則，見 factory-stop-rules）。
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: docker-practice
+  description: Docker —— 從入門到實踐（正體中文版，Docker 教學書）
+  annotations:
+    github.com/project-slug: philipz/docker_practice
+    backstage.io/techdocs-ref: dir:.
+    factory.io/business-criticality: tactical
+    factory.io/risk-profile: low
+    factory.io/complexity: medium
+    factory.io/agent-automerge: "false"
+    factory.io/stack: markdown
+spec:
+  type: documentation
+  lifecycle: experimental
+  owner: user:philipz
