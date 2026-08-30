@@ -1,0 +1,16 @@
+.github/factory/risk-paths.yml
+  h_d3690fca481446 1-14
+catalog-info.yaml
+  h_d3690fca481446 1-20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "110bfb92a0b30dccf957dce499f9f2955a589bd1",
+  "prompts": {},
+  "humans": {
+    "h_d3690fca481446": {
+      "author": "philipz <philipz@users.noreply.github.com>"
+    }
+  }
+}
