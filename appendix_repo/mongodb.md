@@ -1,26 +1,46 @@
-## [MongoDB](https://registry.hub.docker.com/_/mongo/)
+## MongoDB
 
-### 基本訊息
+### 基本資訊
+
 [MongoDB](https://en.wikipedia.org/wiki/MongoDB) 是開源的 NoSQL 資料庫實作。
-該倉庫提供了 MongoDB 2.2 ~ 2.7 各個版本的映像檔。
+
+該倉庫位於 `https://hub.docker.com/_/mongo/`。具體可用版本以 Docker Hub 上的 tags 列表為準。
 
 ### 使用方法
-預設會在 `27017` 連接埠啟動資料庫。
-```
-$ sudo docker run --name some-mongo -d mongo
+
+預設會在 `27017` 埠號啟動資料庫。
+
+```bash
+$ docker run --name mongo -d mongo
 ```
 
-使用其他應用連線到容器，可以用
+使用其他應用連線到容器，首先建立網路
+
+```bash
+$ docker network create my-mongo-net
 ```
-$ sudo docker run --name some-app --link some-mongo:mongo -d application-that-uses-mongo
+
+然後啟動 MongoDB 容器
+
+```bash
+$ docker run --name some-mongo -d --network my-mongo-net mongo
 ```
-或者透過 `mongo`
+
+最後啟動應用容器
+
+```bash
+$ docker run --name some-app -d --network my-mongo-net application-that-uses-mongo
 ```
-$ sudo docker run -it --link some-mongo:mongo --rm mongo sh -c 'exec mongo "$MONGO_PORT_27017_TCP_ADDR:$MONGO_PORT_27017_TCP_PORT/test"'
+
+或者透過 `mongosh`（MongoDB 6.0+ 已移除舊版 `mongo` 命令行工具）
+
+```bash
+$ docker run -it --rm \
+    --network my-mongo-net \
+    mongo \
+    mongosh "some-mongo:27017/test"
 ```
 
 ### Dockerfile
-* [2.2 版本](https://github.com/docker-library/mongo/blob/77c841472ccb6cc87fea1218269d097405edc6cb/2.2/Dockerfile)
-* [2.4 版本](https://github.com/docker-library/mongo/blob/807078cb7b5f0289f6dabf9f6875d5318122bc30/2.4/Dockerfile)
-* [2.6 版本](https://github.com/docker-library/mongo/blob/77c841472ccb6cc87fea1218269d097405edc6cb/2.6/Dockerfile)
-* [2.7 版本](https://github.com/docker-library/mongo/blob/807078cb7b5f0289f6dabf9f6875d5318122bc30/2.7/Dockerfile)
+
+請到 [Mongo 官方映像檔文件目錄](https://github.com/docker-library/docs/tree/master/mongo) 查看。

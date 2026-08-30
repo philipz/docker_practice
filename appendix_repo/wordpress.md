@@ -1,19 +1,40 @@
-## [WordPress](https://registry.hub.docker.com/_/wordpress/)
+## WordPress
 
-### 基本訊息
+### 基本資訊
+
 [WordPress](https://en.wikipedia.org/wiki/WordPress) 是開源的 Blog 和內容管理系統框架，它基於 PHP 和 MySQL。
-該倉庫提供了 WordPress 4.0 版本的映像檔。
+
+該倉庫位於 `https://hub.docker.com/_/wordpress/`。具體可用版本以 Docker Hub 上的 tags 列表為準。
 
 ### 使用方法
-啟動容器需要 MySQL 的支援，預設連接埠為 `80`。
+
+啟動容器需要 MySQL 的支援，預設埠號為 `80`。
+
+首先建立網路
+
+```bash
+$ docker network create my-wordpress-net
 ```
-$ sudo docker run --name some-wordpress --link some-mysql:mysql -d wordpress
+
+啟動 MySQL 容器
+
+```bash
+$ docker run --name some-mysql -d --network my-wordpress-net -e MYSQL_ROOT_PASSWORD=mysecretpassword mysql
 ```
-啟動 WordPress 容器時可以指定的一些環境參數包括
-* `-e WORDPRESS_DB_USER=...` 預設為 “root”
-* `-e WORDPRESS_DB_PASSWORD=...` 預設為連線 mysql 容器的環境變量 `MYSQL_ROOT_PASSWORD` 的值
-* `-e WORDPRESS_DB_NAME=...` 預設為 “wordpress”
-* `-e WORDPRESS_AUTH_KEY=...` 、 `-e WORDPRESS_SECURE_AUTH_KEY=...` 、 `-e WORDPRESS_LOGGED_IN_KEY=...` 、 `-e WORDPRESS_NONCE_KEY=...` 、 `-e WORDPRESS_AUTH_SALT=...` 、 `-e WORDPRESS_SECURE_AUTH_SALT=...` 、 `-e WORDPRESS_LOGGED_IN_SALT=...` 、 `-e WORDPRESS_NONCE_SALT=...` 預設為隨機 SHA1 串
+
+啟動 WordPress 容器
+
+```bash
+$ docker run --name some-wordpress -d --network my-wordpress-net -e WORDPRESS_DB_HOST=some-mysql -e WORDPRESS_DB_PASSWORD=mysecretpassword wordpress
+```
+
+啟動 WordPress 容器時可以指定的一些環境變數包括：
+
+* `WORDPRESS_DB_HOST`：MySQL 服務的主機名
+* `WORDPRESS_DB_USER`：MySQL 資料庫的使用者名稱
+* `WORDPRESS_DB_PASSWORD`：MySQL 資料庫的密碼
+* `WORDPRESS_DB_NAME`：WordPress 要使用的資料庫名
 
 ### Dockerfile
-* [4.0 版本](https://github.com/docker-library/wordpress/blob/aee00669e7c43f435f021cb02871bffd63d5677a/Dockerfile)
+
+請到 [WordPress 官方映像檔文件目錄](https://github.com/docker-library/docs/tree/master/wordpress) 查看。
