@@ -1,80 +1,278 @@
 ## 進入容器
-在使用 `-d` 參數時，容器啟動後會進入背景執行。
-某些時候需要進入容器進行操作，有很多種方法，包括使用 `docker attach` 命令或 `nsenter` 工具等。
-### exec 命令
-`docker exec` 是Docker內建的命令。下面示範如何使用該命令。
+
+### 為什麼需要進入容器
+
+使用 `-d` 參數啟動容器後，容器在後臺執行。以下情境需要進入容器內部操作：
+
+| 情境 | 範例 |
+|------|------|
+| **除錯問題** | 查看日誌、檢查設定、排查錯誤 |
+| **臨時操作** | 執行資料庫遷移、清理快取 |
+| **檢查狀態** | 查看程式、網路連線、檔案系統 |
+| **開發測試** | 互動式測試命令、驗證環境 |
+
+### 兩種進入方式
+
+Docker 提供兩種進入容器的命令：
+
+| 命令 | 推薦程度 | 特點 |
+|------|---------|------|
+| `docker exec` | ✅ **推薦** | 啟動新程式，退出不影響容器 |
+| `docker attach` | ⚠️ 謹慎使用 | 附加到主程式，退出可能停止容器 |
+
+---
+
+### docker exec：推薦
+
+#### docker exec 基本用法
+
+```bash
+## 進入容器並啟動互動式 shell
+
+$ docker exec -it 容器名 /bin/bash
+
+## 或使用 sh（適用於 Alpine 等精簡映像檔）
+
+$ docker exec -it 容器名 /bin/sh
 ```
-$ sudo docker run -idt ubuntu
-243c32535da7d142fb0e6df616a3c3ada0b8ab417937c853a9e1c251f499f550
-$ sudo docker ps
-CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
-243c32535da7        ubuntu:latest       "/bin/bash"         18 seconds ago      Up 17 seconds                           nostalgic_hypatia
-$sudo docker exec -ti nostalgic_hypatia bash
-root@243c32535da7:/#
+
+#### 參數說明
+
+| 參數 | 作用 |
+|------|------|
+| `-i` | 保持標準輸入打開 (interactive)|
+| `-t` | 分配虛擬終端機 (TTY)|
+| `-it` | 兩者組合，獲得完整互動體驗 |
+| `-u` | 指定使用者（如 `-u root`）|
+| `-w` | 指定工作目錄 |
+| `-e` | 設定環境變數 |
+
+#### docker exec 範例
+
+```bash
+## 啟動一個後臺容器
+
+$ docker run -dit --name myubuntu ubuntu
+69d137adef7a...
+
+## 進入容器（互動式 shell）
+
+$ docker exec -it myubuntu bash
+root@69d137adef7a:/# ls
+bin  boot  dev  etc  home  lib  ...
+root@69d137adef7a:/# exit
+
+## 容器仍在執行！
+
+$ docker ps
+CONTAINER ID   IMAGE    STATUS         NAMES
+69d137adef7a   ubuntu   Up 2 minutes   myubuntu
 ```
-### attach 命令
-`docker attach` 亦是Docker內建的命令。下面示例如何使用該命令。
+
+#### 執行單條命令
+
+不進入互動模式，直接執行命令：
+
+```bash
+## 查看容器內程式
+
+$ docker exec myubuntu ps aux
+
+## 查看設定檔案
+
+$ docker exec myubuntu cat /etc/nginx/nginx.conf
+
+## 以 root 使用者執行
+
+$ docker exec -u root myubuntu apt update
 ```
-$ sudo docker run -idt ubuntu
-243c32535da7d142fb0e6df616a3c3ada0b8ab417937c853a9e1c251f499f550
-$ sudo docker ps
-CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
-243c32535da7        ubuntu:latest       "/bin/bash"         18 seconds ago      Up 17 seconds                           nostalgic_hypatia
-$sudo docker attach nostalgic_hypatia
+
+#### 只用 -i 不用 -t 的區別
+
+```bash
+## 只用 -i：可以執行命令，但沒有提示字元
+
+$ docker exec -i myubuntu bash
+ls           # 輸入命令
+bin          # 輸出結果
+boot
+dev
+...
+
+## 用 -it：有完整的終端機體驗
+
+$ docker exec -it myubuntu bash
+root@69d137adef7a:/#    # 有提示字元
+```
+> 💡 通常使用 `-it` 組合。只有在腳本中需要透過管道傳入命令時才只用 `-i`。
+
+---
+
+### docker attach：謹慎使用
+
+#### docker attach 基本用法
+
+```bash
+$ docker attach 容器名
+```
+
+#### 工作原理
+
+`attach` 會附加到容器的 **主程式** (PID 1) 的標準輸入輸出：
+
+```mermaid
+flowchart LR
+    subgraph Container ["容器"]
+        direction TB
+        subgraph Process ["主程式"]
+            P1["PID 1: /bin/bash<br>(你的輸入直接傳送到主程式)"]
+        end
+    end
+    Attach["docker attach"] -->|"附加到這裡"| P1
+```
+
+#### docker attach 範例
+
+```bash
+## 啟動容器
+
+$ docker run -dit --name myubuntu ubuntu
+243c32535da7...
+
+## 附加到容器
+
+$ docker attach myubuntu
 root@243c32535da7:/#
 ```
 
-按下 `ctrl` + `P` 然後 `ctrl` + `Q` 跳離容器，讓它繼續在背景執行。
-  
-但是使用 `attach` 命令有時候並不方便。當多個視窗同時 attach 到同一個容器的時候，所有視窗都會同步顯示。當某個視窗因命令阻塞時,其他視窗也無法執行操作了。
+#### ⚠️ 重要警告
 
-### nsenter 命令
-#### 安裝
-`nsenter` 工具已含括在 util-linux 2.23 後的版本內。
-如果系統中 util-linux 包沒有該命令，可以按照下面的方法從原始碼安裝。
-```
-$ cd /tmp; curl https://www.kernel.org/pub/linux/utils/util-linux/v2.24/util-linux-2.24.tar.gz | tar -zxf-; cd util-linux-2.24;
-$ ./configure --without-ncurses
-$ make nsenter && sudo cp nsenter /usr/local/bin
-```
+**從 attach 會話中輸入 `exit` 或按 `Ctrl+D` 會導致容器停止！**
 
-#### 使用
-`nsenter` 可以存取另一個程式的命名空間。nsenter 要正常工作需要有 root 權限。
-很不幸，Ubuntu 14.4 仍然使用的是 util-linux 2.20。安裝最新版本的 util-linux（2.24）版，請按照以下步驟：
+```bash
+$ docker attach myubuntu
+root@243c32535da7:/# exit    # 這會停止容器！
+
+$ docker ps
+CONTAINER ID   IMAGE    STATUS                     NAMES
+243c32535da7   ubuntu   Exited (0) 2 seconds ago   myubuntu
 ```
-$ wget https://www.kernel.org/pub/linux/utils/util-linux/v2.24/util-linux-2.24.tar.gz; tar xzvf util-linux-2.24.tar.gz
-$ cd util-linux-2.24
-$ ./configure --without-ncurses && make nsenter
-$ sudo cp nsenter /usr/local/bin
-```
-為了連線到容器，你還需要找到容器的第一個程式的 PID，可以透過下面的命令取得。
-```
-PID=$(docker inspect --format "{{ .State.Pid }}" <container>)
-```
-透過這個 PID，就可以連線到這個容器：
-```
-$ nsenter --target $PID --mount --uts --ipc --net --pid
-```
-下面給出一個完整的例子。
-```
-$ sudo docker run -idt ubuntu
-243c32535da7d142fb0e6df616a3c3ada0b8ab417937c853a9e1c251f499f550
-$ sudo docker ps
-CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
-243c32535da7        ubuntu:latest       "/bin/bash"         18 seconds ago      Up 17 seconds                           nostalgic_hypatia
-$ PID=$(docker-pid 243c32535da7)
-10981
-$ sudo nsenter --target 10981 --mount --uts --ipc --net --pid
+**原因**：attach 附加到主程式，退出主程式就等於退出容器。
+
+#### 安全退出 attach
+
+使用 `Ctrl+P` 然後 `Ctrl+Q` 可以從 attach 會話中 **分離**，而不停止容器：
+
+```bash
+$ docker attach myubuntu
 root@243c32535da7:/#
+
+## 按 Ctrl+P 然後 Ctrl+Q
+
+read escape sequence
+
+$ docker ps    # 容器仍在執行
+CONTAINER ID   IMAGE    STATUS         NAMES
+243c32535da7   ubuntu   Up 5 minutes   myubuntu
 ```
-更簡單的，建議大家下載
-[.bashrc_docker](https://github.com/yeasy/docker_practice/raw/master/_local/.bashrc_docker)，並將內容放到 .bashrc 中。
+---
+
+### exec vs attach 對比
+
+| 特性 | docker exec | docker attach |
+|------|-------------|---------------|
+| **工作方式** | 在容器內啟動新程式 | 附加到主程式 |
+| **退出影響** | 不影響容器 | 可能停止容器 |
+| **多終端機** | 可以開多個 | 共享同一個會話 |
+| **適用情境** | 除錯、臨時操作 | 查看主程式輸出 |
+| **推薦程度** | ✅ 推薦 | ⚠️ 特殊情境使用 |
+
+```mermaid
+flowchart LR
+    subgraph Exec ["docker exec"]
+        direction TB
+        subgraph Container1 ["容器"]
+            E_PID1["PID 1: nginx"]
+            E_PID50["PID 50: bash"]
+        end
+        NewProc["新程式"] -- 附加到 --> E_PID50
+    end
+
+    subgraph Attach ["docker attach"]
+        direction TB
+        subgraph Container2 ["容器"]
+            A_PID1["PID 1: bash"]
+        end
+        MainProc["附加到主程式"] --> A_PID1
+    end
+
+    note1["退出 bash 不影響 nginx"]
+    note2["退出 bash 容器停止"]
+    Container1 -.-> note1
+    Container2 -.-> note2
 ```
-$ wget -P ~ https://github.com/yeasy/docker_practice/raw/master/_local/.bashrc_docker;
-$ echo "[ -f ~/.bashrc_docker ] && . ~/.bashrc_docker" >> ~/.bashrc; source ~/.bashrc
+---
+
+### 最佳實踐
+
+#### 1. 首選 docker exec
+
+```bash
+## 進入容器除錯
+
+$ docker exec -it myapp bash
+
+## 查看日誌
+
+$ docker exec myapp tail -f /var/log/app.log
+
+## 執行資料庫遷移
+
+$ docker exec myapp python manage.py migrate
 ```
-這個檔案中定義了很多方便使用 Docker 的命令，例如 `docker-pid` 可以取得某個容器的 PID；而 `docker-enter` 可以進入容器或直接在容器內執行命令。
+
+#### 2. 生產環境避免進入容器
+
+編者建議：生產環境應盡量避免進入容器直接操作，而是透過：
+
+- 日誌系統查看日誌（如 `docker logs` 或集中式日誌）
+- 監控系統查看狀態
+- 重新部署而非手動修改
+
+#### 3. 無 shell 映像檔的處理
+
+某些精簡映像檔（如基於 `scratch` 或 `distroless`）沒有 shell：
+
+```bash
+## 這會失敗
+
+$ docker exec -it myapp bash
+OCI runtime exec failed: exec failed: unable to start container process: exec: "bash": executable file not found
+
+## 解決方案：使用除錯容器（需要 Docker Desktop Pro/Team/Business 訂閱）
+
+$ docker debug myapp
 ```
-$ echo $(docker-pid <container>)
-$ docker-enter <container> ls
+> **注意**：`docker debug` 是 Docker Desktop 4.33+ 提供的功能，需要 Pro、Team 或 Business 訂閱。它會附加一個包含常用除錯工具（vim、curl、htop 等）的工具箱到目標容器，即使目標映像檔基於 `scratch` 也能使用。
+---
+
+### 常見問題
+
+#### Q：exec 進入後看不到其他終端機的操作
+
+這是正常的。exec 啟動的是獨立程式，多個 exec 會話互不影響。
+
+#### Q：容器沒有 bash
+
+嘗試使用 sh：
+
+```bash
+$ docker exec -it myapp /bin/sh
 ```
+
+#### Q：需要 root 權限
+
+```bash
+$ docker exec -u root -it myapp bash
+```
+---
