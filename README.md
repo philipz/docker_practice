@@ -1,7 +1,7 @@
 Docker —— 從入門到實踐
 ===============
 
-v0.2.9
+v0.3.0
 
 [Docker](docker.com) 是個偉大的專案，它徹底釋放了虛擬化的，讓應用程式的分派、部署和管理都變得前所未有的有效率和輕鬆！
 
@@ -10,7 +10,7 @@ v0.2.9
 本書源於 [WaitFish](https://github.com/Waitfish) 的《[Docker 學習手冊 v1.0](https://github.com/yeasy/docker_practice/raw/master/_local/docker_manual_waitfish.pdf)》內容。後來，[yeasy](https://github.com/yeasy)
 根據最新 Docker 版本對內容進行了修訂和重寫，並增加內容；經協商將所有內容開源，採用網路合作的方式進行維護。
 
-前六章為基礎內容，供使用者理解 Docker 的基本概念和操作；7 ~ 9 章介紹一些進階操作；第 10 章給出典型的應用場景和實踐案例；11 ~ 13 章介紹關於 Docker 實作的相關技術。
+本書章節涵蓋 Docker 的基本概念（Docker 簡介、基本概念、安裝、映像檔、容器、倉庫、資料管理）、網路（使用網路、進階網路設定）、實戰案例、安全、Dockerfile、Docker Buildx、Docker Compose、底層實作與附錄（命令查詢、常見倉庫介紹、資源連結）。其餘章節（Kubernetes、可觀測性等）將依上游持續分階段同步。
 
 最新版本線上閱讀：[正體版](https://philipzheng.gitbook.io/docker_practice)、[簡體版](https://yeasy.gitbook.io/docker_practice) 或 [DockerPool](http://dockerpool.com/static/books/docker_practice/index.html)。
 
@@ -23,13 +23,7 @@ v0.2.9
 
 ## 主要版本歷史
 
-* 0.3: 2014-10-TODO
-    * 完成倉庫章節；
-    * 重寫安全章節；
-    * 修正底層實作章節的架構、命名空間、控制組、檔案系統、容器格式等內容；
-    * 新增對常見倉庫和鏡像的介紹；
-    * 新增 Dockerfile 的介紹；
-    * 重新校訂中英文混排格式。
+* 0.3: 2026-08 依上游 yeasy/docker_practice 分階段簡轉繁同步，新增 Dockerfile、Buildx、Docker Compose 章節
 * 0.2: 2014-09-18
     * 對照官方文檔重寫介紹、基本概念、安裝、鏡像、容器、倉庫、資料管理、網路等章節；
     * 新增底層實作章節；
@@ -93,5 +87,5 @@ v0.2.9
 
 ## 原出處及參考資料
 
-1. [Docker —— 从入门到实践](https://github.com/yeasy/docker_practice/)
+1. [Docker —— 從入門到實踐](https://github.com/yeasy/docker_practice/)
 2. [《The Swift Programming Language­》正體中文版](https://github.com/tommy60703/the-swift-programming-language-in-traditional-chinese/)
