@@ -1,0 +1,14 @@
+# Risk hard rules（docs/06 §3.2、§5.2）— docker_practice 版。
+# 純文件 repo：無授權/金流/PII/共用模組/遷移/公開 API。
+# H5 保護 guardrail 自身：觸碰 .github/、CODEOWNERS、catalog-info.yaml 一律強制高風險。
+hard_rules:
+  H1: []
+  H2: []
+  H3: []
+  H4: []
+  H5:
+    - ".github/**"
+    - "CODEOWNERS"
+    - "catalog-info.yaml"
+  H6: []
+  H7: []
