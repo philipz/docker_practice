@@ -1,170 +1,120 @@
 ## 私有倉庫
 
-有時候使用 Docker Hub 這樣的公共倉庫可能不方便，使用者可以建立一個本地倉庫供私人使用。本節介紹如何使用本地倉庫。
-`docker-registry` 是官方提供的工具，可以用於建立私有的映像檔倉庫。
+有時候使用 Docker Hub 這樣的公共倉庫可能不方便，使用者可以建立一個本地倉庫供私人使用。
+
+本節介紹如何使用本地倉庫。
+
+[Docker Registry](https://distribution.github.io/distribution/) 是官方提供的工具，可以用於建立私有的映像檔倉庫。本文範例沿用 [distribution/distribution](https://github.com/distribution/distribution) v2.x 相容路徑；新生產部署應評估 Distribution 3.x，並核對設定路徑、遷移說明和生態相容性。
 
 ### 安裝執行 docker-registry
 
 #### 容器執行
 
-在安裝了 Docker 後，可以透過取得官方 registry 映像檔來執行。
+如果您需要搭建私有倉庫，可以透過官方提供的 `registry` 映像檔快速部署。
+
+你可以使用官方 `registry` 映像檔來執行。
 
 ```bash
-$ sudo docker run -d -p 5000:5000 registry
+$ docker run -d -p 5000:5000 --restart=always --name registry registry:2
 ```
 
-這將使用官方的 registry 映像檔來啟動本地的私有倉庫。使用者可以透過指定參數來設定私有倉庫位置，例如設定映像檔儲存到 Amazon S3 服務。
+> **版本說明**：使用 `registry:2` 表示 Docker Registry 2.x 相容範例。Distribution 3.x 已發布穩定版本；不要直接把本章 v2 設定原樣套到 v3 生產環境，升級前應閱讀遷移說明並做相容測試。舊版本 Registry 1.x 已停止維護，不建議使用。
+這將使用官方的 `registry` 映像檔來啟動私有倉庫。預設情況下，倉庫會被建立在容器的 `/var/lib/registry` 目錄下。你可以透過 `-v` 參數來將映像檔檔案存放在本地的指定路徑。例如下面的例子將上傳的映像檔放到本地的 `/opt/data/registry` 目錄。
 
 ```bash
-$ sudo docker run \
-         -e SETTINGS_FLAVOR=s3 \
-         -e AWS_BUCKET=acme-docker \
-         -e STORAGE_PATH=/registry \
-         -e AWS_KEY=AKIAHSHB43HS3J92MXZ \
-         -e AWS_SECRET=xdDowwlK7TJajV1Y7EoOZrmuPEJlHYcNP2k4j49T \
-         -e SEARCH_BACKEND=sqlalchemy \
-         -p 5000:5000 \
-         registry
-````
-
-此外，還可以指定本地路徑（如 `/home/user/registry-conf` ）下的設定檔案。
-
-```bash
-$ sudo docker run -d -p 5000:5000 -v /home/user/registry-conf:/registry-conf -e DOCKER_REGISTRY_CONFIG=/registry-conf/config.yml registry
+$ docker run -d \
+    -p 5000:5000 \
+    -v /opt/data/registry:/var/lib/registry \
+    registry:2
 ```
 
-預設情況下，倉庫會被建立在容器的 `/tmp/registry` 下。可以透過 `-v` 參數來將映像檔檔案存放在本地的指定路徑。
-例以下面的例子將上傳的映像檔放到 `/opt/data/registry` 目錄。
+### 在私有倉庫上傳、搜尋、下載映像檔
+
+建立好私有倉庫之後，就可以使用 `docker tag` 來標記一個映像檔，然後推送它到倉庫。例如私有倉庫位址為 `127.0.0.1:5000`。
+
+先在本機查看已有的映像檔。
 
 ```bash
-$ sudo docker run -d -p 5000:5000 -v /opt/data/registry:/tmp/registry registry
+$ docker image ls
+REPOSITORY                        TAG                 IMAGE ID            CREATED             VIRTUAL SIZE
+ubuntu                            latest              ba5877dc9bec        6 weeks ago         192.7 MB
 ```
+使用 `docker tag` 將 `ubuntu:latest` 這個映像檔標記為 `127.0.0.1:5000/ubuntu:latest`。
 
-#### 本地安裝
-
-對於 Ubuntu 或 CentOS 等發行版，可以直接透過套件庫安裝。
-* Ubuntu
-    ```bash
-    $ sudo apt-get install -y build-essential python-dev libevent-dev python-pip liblzma-dev swig
-    $ sudo pip install docker-registry
-    ```
-* CentOS
-    ```bash
-    $ sudo yum install -y python-devel libevent-devel python-pip gcc xz-devel
-    $ sudo python-pip install docker-registry
-    ```
-
-也可以從 [docker-registry](https://github.com/docker/docker-registry) 專案下載原始碼進行安裝。
+格式為 `docker tag IMAGE[:TAG] [REGISTRY_HOST[:REGISTRY_PORT]/]REPOSITORY[:TAG]`。
 
 ```bash
-$ sudo apt-get install build-essential python-dev libevent-dev python-pip libssl-dev liblzma-dev libffi-dev
-$ git clone https://github.com/docker/docker-registry.git
-$ cd docker-registry
-$ sudo python setup.py install
+$ docker tag ubuntu:latest 127.0.0.1:5000/ubuntu:latest
+$ docker image ls
+REPOSITORY                        TAG                 IMAGE ID            CREATED             VIRTUAL SIZE
+ubuntu                            latest              ba5877dc9bec        6 weeks ago         192.7 MB
+127.0.0.1:5000/ubuntu             latest              ba5877dc9bec        6 weeks ago         192.7 MB
 ```
-
-然後修改設定檔案，主要修改 dev 模板段的 `storage_path` 到本地的儲存倉庫的路徑。
+使用 `docker push` 上傳標記的映像檔。
 
 ```bash
-$ cp config/config_sample.yml config/config.yml
+$ docker push 127.0.0.1:5000/ubuntu:latest
+The push refers to repository [127.0.0.1:5000/ubuntu]
+373a30c24545: Pushed
+a9148f5200b0: Pushed
+cdd3de0940ab: Pushed
+fc56279bbb33: Pushed
+b38367233d37: Pushed
+2aebd096e0e2: Pushed
+latest: digest: sha256:fe4277621f10b5026266932ddf760f5a756d2facd505a94d2da12f4f52f71f5a size: 1568
 ```
-
-之後啟動 Web 服務。
+用 `curl` 查看倉庫中的映像檔。
 
 ```bash
-$ sudo gunicorn -c contrib/gunicorn.py docker_registry.wsgi:application
+$ curl 127.0.0.1:5000/v2/_catalog
+{"repositories":["ubuntu"]}
 ```
+這裡可以看到 `{"repositories":["ubuntu"]}`，表明映像檔已經被成功上傳了。
 
-或者
+先刪除已有映像檔，再嘗試從私有倉庫中下載這個映像檔。
 
 ```bash
-$ sudo gunicorn --access-logfile - --error-logfile - -k gevent -b 0.0.0.0:5000 -w 4 --max-requests 100 docker_registry.wsgi:application
+$ docker image rm 127.0.0.1:5000/ubuntu:latest
+
+$ docker pull 127.0.0.1:5000/ubuntu:latest
+Pulling repository 127.0.0.1:5000/ubuntu:latest
+ba5877dc9bec: Download complete
+511136ea3c5a: Download complete
+9bad880da3d2: Download complete
+25f11f5fb0cb: Download complete
+ebc34468f71d: Download complete
+2318d26665ef: Download complete
+
+$ docker image ls
+REPOSITORY                         TAG                 IMAGE ID            CREATED             VIRTUAL SIZE
+127.0.0.1:5000/ubuntu              latest              ba5877dc9bec        6 weeks ago         192.7 MB
 ```
 
-此時使用連結本地的 5000 連接埠，看到輸出 docker-registry 的版本訊息說明執行成功。
+### 設定非 https 倉庫位址
 
-*註：`config/config_sample.yml` 檔案是範例設定檔案。
+如果你不想使用 `127.0.0.1:5000` 作為倉庫位址，比如想讓本網段的其他主機也能把映像檔推送到私有倉庫。你就得把例如 `192.168.199.100:5000` 這樣的內網位址作為私有倉庫位址，這時你會發現無法成功推送映像檔。
 
-### 在私有倉庫上傳、下載、搜尋映像檔
+這是因為 Docker 預設不允許非 `HTTPS` 方式推送映像檔。我們可以透過 Docker 的設定選項來取消這個限制，或者查看下一節設定能夠透過 `HTTPS` 存取的私有倉庫。
 
-1. 建立好私有倉庫之後，就可以使用 `docker tag` 來標記一個映像檔，然後推送它到倉庫，別的機器上就可以下載下來了。例如私有倉庫位址為 `192.168.7.26:5000`。
-2. 先在本機查看已有的映像檔。
-    ```bash
-    $ sudo docker images
-    REPOSITORY                        TAG                 IMAGE ID            CREATED             VIRTUAL SIZE
-    ubuntu                            latest              ba5877dc9bec        6 weeks ago         192.7 MB
-    ubuntu                            14.04               ba5877dc9bec        6 weeks ago         192.7 MB
-    ```
-3. 使用`docker tag` 將 `ba58` 這個映像檔標記為 `192.168.7.26:5000/test`（格式為 `docker tag IMAGE[:TAG] [REGISTRYHOST/][USERNAME/]NAME[:TAG]`）。
-    ```bash
-    $ sudo docker tag ba58 192.168.7.26:5000/test
-    root ~ # docker images
-    REPOSITORY                        TAG                 IMAGE ID            CREATED             VIRTUAL SIZE
-    ubuntu                            14.04               ba5877dc9bec        6 weeks ago         192.7 MB
-    ubuntu                            latest              ba5877dc9bec        6 weeks ago         192.7 MB
-    192.168.7.26:5000/test            latest              ba5877dc9bec        6 weeks ago         192.7 MB
-    ```
-4. 使用 `docker push` 上傳標記的映像檔。
-    ```bash
-    $ sudo docker push 192.168.7.26:5000/test
-    The push refers to a repository [192.168.7.26:5000/test] (len: 1)
-    Sending image list
-    Pushing repository 192.168.7.26:5000/test (1 tags)
-    Image 511136ea3c5a already pushed, skipping
-    Image 9bad880da3d2 already pushed, skipping
-    Image 25f11f5fb0cb already pushed, skipping
-    Image ebc34468f71d already pushed, skipping
-    Image 2318d26665ef already pushed, skipping
-    Image ba5877dc9bec already pushed, skipping
-    Pushing tag for rev [ba5877dc9bec] on {http://192.168.7.26:5000/v1/repositories/test/tags/latest}
-    ```
-5. 用 curl 查看倉庫中的映像檔。
-    ```bash
-    $ curl http://192.168.7.26:5000/v1/search
-    {"num_results": 7, "query": "", "results": [{"description": "", "name": "library/miaxis_j2ee"}, {"description": "", "name": "library/tomcat"}, {"description": "", "name": "library/ubuntu"}, {"description": "", "name": "library/ubuntu_office"}, {"description": "", "name": "library/desktop_ubu"}, {"description": "", "name": "dockerfile/ubuntu"}, {"description": "", "name": "library/test"}]}
-    ```
-    這裡可以看到 `{"description": "", "name": "library/test"}`，表明映像檔已經被成功上傳了。
-6. 現在可以到另外一臺機器去下載這個映像檔。
-    ```bash
-    $ sudo docker pull 192.168.7.26:5000/test
-    Pulling repository 192.168.7.26:5000/test
-    ba5877dc9bec: Download complete
-    511136ea3c5a: Download complete
-    9bad880da3d2: Download complete
-    25f11f5fb0cb: Download complete
-    ebc34468f71d: Download complete
-    2318d26665ef: Download complete
-    $ sudo docker images
-    REPOSITORY                         TAG                 IMAGE ID            CREATED             VIRTUAL SIZE
-    192.168.7.26:5000/test             latest              ba5877dc9bec        6 weeks ago         192.7 MB
-    ```
-7. 可以使用 [這個腳本](https://github.com/yeasy/docker_practice/raw/master/_local/push_images.sh) 批次上傳本地的映像檔到註冊伺服器中，預設為本地註冊伺服器 `127.0.0.1:5000`。例如：
-    ```bash
-    $ wget https://github.com/yeasy/docker_practice/raw/master/_local/push_images.sh; sudo chmod a+x push_images.sh
-    $ ./push_images.sh ubuntu:latest centos:centos7
-    The registry server is 127.0.0.1
-    Uploading ubuntu:latest...
-    The push refers to a repository [127.0.0.1:5000/ubuntu] (len: 1)
-    Sending image list
-    Pushing repository 127.0.0.1:5000/ubuntu (1 tags)
-    Image 511136ea3c5a already pushed, skipping
-    Image bfb8b5a2ad34 already pushed, skipping
-    Image c1f3bdbd8355 already pushed, skipping
-    Image 897578f527ae already pushed, skipping
-    Image 9387bcc9826e already pushed, skipping
-    Image 809ed259f845 already pushed, skipping
-    Image 96864a7d2df3 already pushed, skipping
-    Pushing tag for rev [96864a7d2df3] on {http://127.0.0.1:5000/v1/repositories/ubuntu/tags/latest}
-    Untagged: 127.0.0.1:5000/ubuntu:latest
-    Done
-    Uploading centos:centos7...
-    The push refers to a repository [127.0.0.1:5000/centos] (len: 1)
-    Sending image list
-    Pushing repository 127.0.0.1:5000/centos (1 tags)
-    Image 511136ea3c5a already pushed, skipping
-    34e94e67e63a: Image successfully pushed
-    70214e5d0a90: Image successfully pushed
-    Pushing tag for rev [70214e5d0a90] on {http://127.0.0.1:5000/v1/repositories/centos/tags/centos7}
-    Untagged: 127.0.0.1:5000/centos:centos7
-    Done
-    ```
+#### Linux
+
+預設情況下，Docker 強制使用 HTTPS 協定推送映像檔。如果您搭建的私有倉庫是 HTTP 協定，需要進行如下設定。
+
+
+對於使用 `systemd` 的系統，請在 `/etc/docker/daemon.json` 中寫入如下內容（如果檔案不存在請新建該檔案）
+
+```json
+{
+  "registry-mirrors": [
+    "https://docker.your-mirror.example.com"
+  ],
+  "insecure-registries": [
+    "192.168.199.100:5000"
+  ]
+}
+```
+> 注意：該檔案必須符合 `json` 規範，否則 Docker 將不能啟動。映像檔加速器位址請替換為實際可用的源，具體設定參見「安裝」章節的映像檔加速器說明。
+
+### 其他
+
+對於 Docker Desktop for Windows、Docker Desktop for Mac 在設定中的 `Docker Engine` 中進行編輯，增加和上邊一樣的字串即可。

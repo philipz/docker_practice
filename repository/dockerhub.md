@@ -1,63 +1,138 @@
 ## Docker Hub
 
-目前 Docker 官方維護了一個公共倉庫 [Docker Hub](https://hub.docker.com/)，其中已經包括了超過 15,000 的映像檔。大部分需求都可以透過在 Docker Hub 中直接下載映像檔來實作。
+### 什麼是 Docker Hub
 
-### 登錄
+Docker Hub 是 Docker 的中央映像檔倉庫，透過它您可以輕鬆地分享和取得 Docker 映像檔。
 
-- 可以透過執行 `docker login` 命令來輸入使用者名稱、密碼和電子信箱來完成註冊和登錄。
-- 註冊成功後，本地使用者目錄的 `.dockercfg` 中將保存使用者的認證訊息。
 
-### 基本操作
+[Docker Hub](https://hub.docker.com/) 是 Docker 官方維護的公共映像檔倉庫，也是全球最大的容器映像檔庫。
 
-使用者無需登錄即可透過 `docker search` 命令來查詢官方倉庫中的映像檔，並利用 `docker pull` 命令來將它下載到本地。
-例如以 centos 為關鍵字進行搜尋：
+它提供了：
+
+- **官方映像檔**：由 Docker 官方和軟體廠商（如 Nginx，MySQL，Node.js）維護的高品質映像檔。
+- **個人/組織倉庫**：使用者可以上傳自己的映像檔。
+- **自動建立**：與 GitHub/Bitbucket 整合的歷史功能，Docker 已標記為 deprecated，並計劃於 2027-04-01 完全退役。
+- **Webhooks**：映像檔更新時觸發回呼。
+
+---
+
+### 核心功能
+
+#### 1. 搜尋映像檔
+
+我們可以透過 `docker search` 命令來查詢官方倉庫中的映像檔，並利用 `docker pull` 命令來將它下載到本地。
+
+
+除了網頁搜尋，也可以使用命令行：
 
 ```bash
-$ sudo docker search centos
-NAME                                            DESCRIPTION                                     STARS     OFFICIAL   AUTOMATED
-centos                                          The official build of CentOS.                   465       [OK]
-tianon/centos                                   CentOS 5 and 6, created using rinse instea...   28
-blalor/centos                                   Bare-bones base CentOS 6.5 image                6                    [OK]
-saltstack/centos-6-minimal                                                                      6                    [OK]
-tutum/centos-6.4                                DEPRECATED. Use tutum/centos:6.4 instead. ...   5                    [OK]
+$ docker search centos
+NAME      DESCRIPTION                                  STARS     OFFICIAL
+centos    DEPRECATED; The official build of CentOS.    7000+     [OK]
+```
+> **技巧**：始終優先使用 `OFFICIAL` 標記為 `[OK]` 的映像檔，安全性更有保障。
+
+#### 2. 拉取映像檔
+
+```bash
+$ docker pull nginx:alpine
+```
+
+#### 3. 推送映像檔
+
+需要先登入：
+
+```bash
+$ docker login
+
+## 預設情況下，不帶其他參數進行 docker login 會自動走 Device Code Web Flow (瀏覽器認證)
+## 若在非互動 CI 環境中，推薦結合 --username 與 --password-stdin 參數使用
+
 ...
 ```
-
-可以看到顯示了很多包含關鍵字的映像檔，其中包括映像檔名字、描述、星級（表示該映像檔的受歡迎程度）、是否官方建立、是否自動建立。
-官方的映像檔說明是官方專案組建立和維護的，automated 資源允許使用者驗證映像檔的來源和內容。
-
-根據是否是官方提供，可將映像檔資源分為兩類。
-一種是類似 centos 這樣的基礎映像檔，被稱為基礎或根映像檔。這些基礎映像檔是由 Docker 公司建立、驗證、支援、提供。這樣的映像檔往往使用單個單詞作為名字。
-還有一種類型，比如 `tianon/centos` 映像檔，它是由 Docker 的使用者建立並維護的，往往帶有使用者名稱前綴。可以透過前綴 `user_name/` 來指定使用某個使用者提供的映像檔，比如 tianon 使用者。
-
-另外，在查詢的時候透過 `-s N` 參數可以指定僅顯示評價為 `N` 星以上的映像檔。
-
-下載官方 centos 映像檔到本地。
+打標籤並推送：
 
 ```bash
-$ sudo docker pull centos
-Pulling repository centos
-0b443ba03958: Download complete
-539c0211cd76: Download complete
-511136ea3c5a: Download complete
-7064731afe90: Download complete
+## 1. 標記映像檔
+
+$ docker tag myapp:v1 username/myapp:v1
+
+## 2. 推送
+
+$ docker push username/myapp:v1
+```
+---
+
+### 限制與配額
+
+#### 映像檔拉取限制
+
+Docker Hub 對不同類型使用者實施拉取速率限制（基於 6 小時週期）：
+
+| 使用者類型 | 限制 |
+|---------|------|
+| **匿名使用者**（未登入）| 每 6 小時 100 次請求 |
+| **免費帳戶**（已登入）| 每 6 小時 200 次請求 |
+| **Pro/Team/Business 帳戶** | 無限制（公平使用政策） |
+
+> **注意**：Docker 曾計劃於 2025 年 4 月調整拉取限制策略，但在 2025 年 2 月宣布取消該計劃。目前付費訂閱使用者享有無限制拉取額度，匿名使用者和免費帳戶的限制保持不變。建議在 CI/CD 環境中始終設定 `docker login` 以獲得更高的拉取額度。
+
+#### 濫用限流
+
+除了上述針對特定帳號拉取映像檔數量的 Pull Rate Limit 之外，Docker Hub 對所有使用者（包含已認證及付費使用者）還實施了 **濫用保護限流 (Abuse Rate Limiting)**。它是根據網路出口 IP（IPv4 或 IPv6 /64 子網）計算整體請求頻率，閾值動態觸發（通常為每分鐘數千級別請求）。
+
+**兩類的差異與排查方法**：
+
+- **Pull Rate Limit**：針對拉取量達到上限。報錯回傳 `429 Too Many Requests`，並且 HTTP 回傳體/CLI 錯誤提示中會帶有明確的 `toomanyrequests: You have reached your pull rate limit` 提示，常附有帳戶升級連結。
+- **Abuse Rate Limit**：防範介面頻率打擊。報錯僅回傳簡化的 `429 Too Many Requests`。這一限流不分付費與否，常發生在「多終端共享出口 IP」的企業區域網路或者第三方雲 CI 服務（如 GitHub Actions 等）中，即使你已正常設定 `docker login` 也依舊可能觸發。
+
+> **提示**：如果在 CI/CD 等環境遇到 429 錯誤，建議：
+> 1. 先甄別具體是哪類限流：普通的 pull rate limit 只要在 CI 中設定 `docker login`（並使用有效帳號）就能解除匿名限制。
+> 2. 如果是 Abuse 頻控導致，應考慮搭建私有倉庫作為拉取快取代理 (Registry pull-through cache)，避免頻繁直接請求官方 Hub。
+> 3. 使用國內映像檔加速器。
+
+---
+
+### 安全最佳實踐
+
+#### 1. 啟用 2FA：雙因素認證
+
+為了保護您的 Docker Hub 帳號安全，我們建議採取以下措施。
+
+
+在 Account Settings -> Security 中啟用 2FA，保護帳號安全。啟用後，CLI 登入需要使用 **Access Token** 而非密碼。
+
+#### 2. 使用 Access Token
+
+> **⚠️ 警告**：絕不要在腳本或 CI/CD 系統中，直接使用 `-p` 參數傳遞密碼或 Token（類似 `docker login -p xxx`）！這會導致憑證直接暴露在系統的命令歷史、程式列表和終端輸出中。
+
+1. 在 Docker Hub -> Account Settings -> Security -> Access Tokens 建立 Token (PAT)。
+2. 將 Token 保存在權限受限的本地檔案或 CI secret 中，再透過標準輸入 (stdin) 傳遞給 Docker，避免把真實 Token 寫進腳本、命令歷史或日誌：
+
+```bash
+$ chmod 600 "$HOME/.dockerhub-token"
+$ cat "$HOME/.dockerhub-token" | docker login --username username --password-stdin
 ```
 
-使用者也可以在登錄後透過 `docker push` 命令來將映像檔推送到 Docker Hub。
+#### 3. 關注映像檔漏洞
+
+Docker Hub 提供 Docker Scout 安全掃描功能。官方映像檔的漏洞掃描結果對所有使用者免費可見。Docker Scout 的持續掃描功能在免費層可以覆蓋 1 個私有倉庫，付費使用者可以掃描更多倉庫。在映像檔標籤頁可以看到漏洞掃描結果。
+
+---
+
+### Webhooks
+
+當映像檔被推送時，可以自動觸發 HTTP 回呼（例如通知 CI 系統部署）。
+
+**設定方法**：
+倉庫頁面 -> Webhooks -> Create Webhook。
+
+---
 
 ### 自動建立
 
-自動建立（Automated Builds）功能對於需要經常升級映像檔內程式來說，十分方便。
-有時候，使用者建立了映像檔，安裝了某個軟體，如果軟體發布新版本則需要手動更新映像檔。。
+> ⚠️ Docker Hub Automated Builds 已被 Docker 標記為 deprecated，並計劃於 2027-04-01 完全退役；新專案應優先使用 GitHub Actions、Buildx 或自有 CI 建立並推送映像檔。
 
-而自動建立允許使用者透過 Docker Hub 指定跟蹤一個目標網站（目前支援 [GitHub](github.org) 或 [BitBucket](bitbucket.org)）上的專案，一旦專案發生新的提交，則自動執行建立。
+對於仍在遷移期內的舊倉庫，連結 GitHub/Bitbucket 倉庫後，當程式碼有提交或打標籤時，Docker Hub 會自動執行建立。不要把它作為新架構的預設方案。
 
-要設定自動建立，包括以下的步驟：
-
-- 建立並登陸 Docker Hub，以及目標網站；
-- 在目標網站中連結帳戶到 Docker Hub；
-- 在 Docker Hub 中 [設定一個自動建立](https://registry.hub.docker.com/builds/add/)；
-- 選取一個目標網站中的專案（需要含 Dockerfile）和分支；
-- 指定 Dockerfile 的位置，並提交建立。
-
-之後，可以 在Docker Hub 的 [自動建立頁面](https://registry.hub.docker.com/builds/) 中跟蹤每次建立的狀態。
+---
