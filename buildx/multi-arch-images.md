@@ -1,4 +1,4 @@
-## 使用 buildx 構建多種系統架構支援的 Docker 映像檔
+## 使用 buildx 建立多種系統架構支援的 Docker 映像檔
 
 Docker 映像檔可以支援多種系統架構，這意味著你可以在 `x86_64`、`arm64` 等不同架構的機器上執行同一個映像檔。這是透過一個名為 “manifest list”（或稱為 “fat manifest”）的檔案來實作的。
 
@@ -40,24 +40,24 @@ $ docker manifest inspect hello-world
 }
 ```
 
-### 使用 `docker buildx` 構建多架構映像檔
+### 使用 `docker buildx` 建立多架構映像檔
 
-`docker buildx` 是構建多架構映像檔的最佳實務工具，它遮罩了底層的複雜性，提供了一鍵構建多架構映像檔的能力。
+`docker buildx` 是建立多架構映像檔的最佳實務工具，它遮罩了底層的複雜性，提供了一鍵建立多架構映像檔的能力。
 
-在 Docker 19.03+ 版本中，`docker buildx` 是建議的用於構建多架構映像檔的工具。它使用 `BuildKit` 作為後端，可以大大簡化構建過程（Docker 23+ 預設啟用 BuildKit）。
+在 Docker 19.03+ 版本中，`docker buildx` 是建議的用於建立多架構映像檔的工具。它使用 `BuildKit` 作為後端，可以大大簡化建立過程（Docker 23+ 預設啟用 BuildKit）。
 
 #### 新建 `builder` 執行個體
 
-首先，你需要建立一個新的 `builder` 執行個體，因為它支援同時為多個平台構建。
+首先，你需要建立一個新的 `builder` 執行個體，因為它支援同時為多個平台建立。
 
 ```bash
 $ docker buildx create --name mybuilder --use
 $ docker buildx inspect --bootstrap
 ```
 
-#### 構建和推送
+#### 建立和推送
 
-使用 `docker buildx build` 命令並指定 `--platform` 參數，可以同時構建支援多種架構的映像檔。`--push` 參數會將構建好的映像檔和 manifest list 推送到 Docker 倉庫。
+使用 `docker buildx build` 命令並指定 `--platform` 參數，可以同時建立支援多種架構的映像檔。`--push` 參數會將建立好的映像檔和 manifest list 推送到 Docker 倉庫。
 
 ```dockerfile
 ## Dockerfile
@@ -71,20 +71,20 @@ CMD cat /os.txt
 ```bash
 $ docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 -t your-username/multi-arch-image . --push
 ```
-構建完成後，你就可以在不同架構的機器上拉取並執行 `your-username/multi-arch-image` 這個映像檔了。
+建立完成後，你就可以在不同架構的機器上拉取並執行 `your-username/multi-arch-image` 這個映像檔了。
 
-#### 架構相關的構建參數
+#### 架構相關的建立參數
 
-在 `Dockerfile` 中，你可以使用一些預定義的構建參數來根據目標平台客製構建過程：
+在 `Dockerfile` 中，你可以使用一些預定義的建立參數來根據目標平台客製建立過程：
 
-*   `TARGETPLATFORM`：構建映像檔的目標平台，例如 `linux/amd64`。
+*   `TARGETPLATFORM`：建立映像檔的目標平台，例如 `linux/amd64`。
 *   `TARGETOS`：目標平台的作業系統，例如 `linux`。
 *   `TARGETARCH`：目標平台的架構，例如 `amd64`。
 *   `TARGETVARIANT`：目標平台的變種，例如 `v7`。
-*   `BUILDPLATFORM`：構建環境的平台。
-*   `BUILDOS`：構建環境的作業系統。
-*   `BUILDARCH`：構建環境的架構。
-*   `BUILDVARIANT`：構建環境的變種。
+*   `BUILDPLATFORM`：建立環境的平台。
+*   `BUILDOS`：建立環境的作業系統。
+*   `BUILDARCH`：建立環境的架構。
+*   `BUILDVARIANT`：建立環境的變種。
 
 例如，你可以這樣編寫 `Dockerfile` 來複製特定架構的二進位檔案：
 
@@ -108,7 +108,7 @@ ENTRYPOINT ["/dist"]
 #### 建立 manifest list
 
 ```bash
-## 首先，為每個架構構建並推送映像檔
+## 首先，為每個架構建立並推送映像檔
 
 $ docker buildx build --platform linux/amd64 -t your-username/my-app:amd64 . --push
 $ docker buildx build --platform linux/arm64 -t your-username/my-app:arm64 . --push

@@ -7,6 +7,7 @@
 檢查項目：
   (a) 翻譯檔不含「必簡字元」（僅收錄無歧義、不做繁簡一對多對應的簡體專用字）。
   (b) 術語符合 philipz 慣例（不得出現簡體術語）。
+  (b2) 不得出現「正體禁詞」（正體字形但不符合慣例的詞，如「構建」應為「建立」）。
   (c) SUMMARY.md 中的條目對應檔案皆存在。
   (d) 翻譯檔內部的相對連結可解析（相對於該檔案所在目錄）。
 
@@ -59,6 +60,16 @@ TERM_MAP = {
     "信息": "資訊",
 }
 
+# ---------------------------------------------------------------------------
+# (b2) 正體禁詞：以正體字形書寫、但不符合 philipz 術語慣例的詞。
+#       例如「構建」這個混合了簡繁的詞，慣例應為「建立」。
+#       注意：此處只收錄「構建」這類正體字形即可辨識的違規詞；
+#       簡體術語（如「构建」）仍由上方 TERM_MAP 處理。
+# ---------------------------------------------------------------------------
+TRADITIONAL_FORBIDDEN_TERMS = {
+    "構建": "建立",
+}
+
 # 檢查時排除的路徑前綴（不檢查這些目錄，避免誤判既有簡體內容）。
 EXCLUDE_PREFIXES = (
     "tools/",  # 腳本本身可能含簡體字（但本腳本為正體，理應通過）
@@ -103,6 +114,27 @@ def check_terms(path):
             for term in TERM_MAP:
                 if term in line:
                     issues.append((lineno, term))
+    return issues
+
+
+def check_forbidden_terms(path):
+    """檢查正體禁詞。回傳違規列表 (lineno, term)。
+
+    對「構建」這類禁詞做邊界判斷：僅當「構」不是緊接在「架」「結」
+    （即「架構」「結構」等正當詞）之後時，才視為違規的「構建」。
+    """
+    issues = []
+    with open(path, encoding="utf-8") as f:
+        for lineno, line in enumerate(f, 1):
+            idx = 0
+            while True:
+                idx = line.find("構建", idx)
+                if idx < 0:
+                    break
+                prev = line[idx - 1] if idx > 0 else ""
+                if prev not in "架結":
+                    issues.append((lineno, "構建"))
+                idx += 1
     return issues
 
 
@@ -176,6 +208,10 @@ def main():
         for lineno, term in term_issues:
             print(f"[簡體術語] {rel}:{lineno} 出現簡體術語「{term}」→ 應為「{TERM_MAP[term]}」")
             total_issues += 1
+        forbidden_issues = check_forbidden_terms(path)
+        for lineno, term in forbidden_issues:
+            print(f"[正體禁詞] {rel}:{lineno} 出現正體禁詞「{term}」→ 應為「{TRADITIONAL_FORBIDDEN_TERMS[term]}」")
+            total_issues += 1
 
     # (c) SUMMARY.md 完整性
     for item in check_summary(root):
@@ -193,7 +229,7 @@ def main():
             total_issues += 1
 
     if total_issues == 0:
-        print("正體中文檢查通過：無簡體字、無簡體術語、SUMMARY 完整、連結可解析。")
+        print("正體中文檢查通過：無簡體字、無簡體術語、無正體禁詞、SUMMARY 完整、連結可解析。")
         return 0
     print(f"\n共發現 {total_issues} 個問題。")
     return 1
