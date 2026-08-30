@@ -1,52 +1,40 @@
-## Ubuntu
+## Debian
 
-Ubuntu 是 Docker 最常用的執行環境之一。本節將介紹如何在 Ubuntu 系統上安裝 Docker，並設定大陸映像檔加速。
+Debian 以其穩定性著稱，是 Docker 的理想宿主系統。本節將指導你在 Debian 上完成 Docker 的安裝。
 
-### 為什麼推薦 APT 源安裝而不是腳本？
+### APT 源安裝的必要性
 
-雖然 Docker 官方提供了便捷的安裝腳本（`get.docker.com`），但筆者在生產環境中**強烈推薦透過 Docker 官方 APT 倉庫安裝**，原因如下：
-
-- **版本管理**：透過 APT 倉庫安裝後，可以像管理其他系統軟體套件一樣升級、回滾和鎖定版本
-- **安全更新**：Docker 官方倉庫會持續發布新版本和安全修復，適合長期維護
-- **一致性**：團隊更容易鎖定同一版本，避免「在我的機器上可以執行」的問題
-- **解除安裝乾淨**：APT 套件管理系統會負責清理所有相關檔案，腳本安裝的清理往往不夠徹底
-
-如果你只是想快速嘗試 Docker，腳本安裝沒有問題；但一旦涉及持久維運，APT 源是更成熟的選擇。
+與 Ubuntu 類似，Debian 使用者在安裝 Docker 時同樣應該優先選擇 Docker 官方 APT 倉庫。對於伺服器環境，這種方式更利於版本控制、升級和長期維護。
 
 > 警告：切勿在沒有設定 Docker APT 源的情況下直接使用 apt 命令安裝 Docker。
 
 ### 準備工作
 
-在開始安裝之前，我們需要確認系統版本是否滿足要求，並清理可能存在的舊版本。
+安裝前請仔細檢查 Debian 版本支援情況，並解除安裝舊版本以避免衝突。
 
 #### 系統要求
 
-根據 Docker 官方安裝文件，目前受支援的 [Ubuntu](https://ubuntu.com/server) 64 位元版本包括（具體以官方 [安裝文件](https://docs.docker.com/engine/install/ubuntu/) 為準）：
+Docker 支援以下版本的 [Debian](https://www.debian.org/intro/about) 作業系統（具體以官方 [安裝文件](https://docs.docker.com/engine/install/debian/) 為準）：
 
+* Debian Trixie 13 (stable)
+* Debian Bookworm 12（oldstable，全面支援至 2026 年 6 月 10 日，LTS 至 2028 年 6 月 30 日）
+* Debian Bullseye 11（oldoldstable，LTS 支援至 2026 年 8 月 31 日）
 
-* Ubuntu Resolute Raccoon 26.04 (LTS)
-* Ubuntu Questing Quokka 25.10
-* Ubuntu Noble 24.04 (LTS)
-* Ubuntu Jammy 22.04 (LTS)
-
-> **警告**：Ubuntu 20.04 LTS 已不在 Docker 目前支援列表中，不建議用於新部署。對於仍在執行 20.04 的生產系統，應盡快升級到 22.04 LTS 或 24.04 LTS；若短期內無法遷移，可透過 Ubuntu Pro 取得作業系統層面的擴展安全維護（ESM），但這並不改變 Docker 官方支援矩陣。
-
-在 Ubuntu LTS 版本上，目前 Docker 支援 amd64、arm64、armhf、ppc64el、s390x 等 5 個平台；而非 LTS 版本支援的平台通常較少。同時，LTS 版本會獲得 5 年的升級維護支援，這樣的系統會獲得更長期的安全保障，因此在生產環境中推薦使用 LTS 版本。
+> **注意**：Debian Bullseye 11 將於 2026 年 8 月底結束長期支援。建議新部署使用 Bookworm 12 或 Trixie 13。
 
 #### 解除安裝舊版本
 
 Docker 官方建議先解除安裝可能衝突的非官方軟體套件：
 
 ```bash
-$ for pkg in docker.io docker-compose docker-compose-v2 docker-doc podman-docker containerd runc;
-do
-    sudo apt remove $pkg;
+$ for pkg in docker.io docker-compose docker-compose-v2 docker-doc podman-docker containerd runc; do
+    sudo apt remove $pkg
 done
 ```
 
 ### 使用 APT 安裝
 
-先安裝基礎相依，並準備 Docker 官方金鑰目錄：
+先安裝基礎相依，並準備金鑰目錄：
 
 ```bash
 $ sudo apt update
@@ -54,29 +42,31 @@ $ sudo apt update
 $ sudo apt install ca-certificates curl
 $ sudo install -m 0755 -d /etc/apt/keyrings
 ```
-如果企業內網已經維護了受信任的軟體套件映像檔，可在後續步驟中替換 `URIs` 的網域名稱；預設建議優先用 Docker 官方倉庫為準。
+如果公司內網維護了受信任映像檔站，可在後續倉庫位址中替換網域名稱；預設建議優先使用 Docker 官方倉庫。
 
-為了確認所下載軟體套件的合法性，需要新增倉庫簽名金鑰：
+為了確認所下載軟體套件的合法性，需要新增軟體源的 GPG 金鑰。
 
 ```bash
-$ sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+$ sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
 $ sudo chmod a+r /etc/apt/keyrings/docker.asc
 ```
-然後向 `apt` 新增 Docker 倉庫：
+然後，我們需要向 `sources.list` 中新增 Docker 軟體源：
+
+> 在一些基於 Debian 的 Linux 發行版中，`$(. /etc/os-release && echo "$VERSION_CODENAME")` 可能不會回傳 Debian 官方倉庫使用的代號，例如 [Kali Linux](https://www.kali.org/docs/policy/kali-linux-relationship-with-debian/) 等衍生發行版。此時請手動替換為對應的 Debian 代號，例如 `bookworm`。
 
 ```bash
 $ sudo tee /etc/apt/sources.list.d/docker.sources <<EOF
 Types: deb
-URIs: https://download.docker.com/linux/ubuntu
-Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
+URIs: https://download.docker.com/linux/debian
+Suites: $(. /etc/os-release && echo "$VERSION_CODENAME")
 Components: stable
 Architectures: $(dpkg --print-architecture)
 Signed-By: /etc/apt/keyrings/docker.asc
 EOF
 ```
-> 如果需要測試頻道，可將 `Components: stable` 改為 `test`，或改用 `test.docker.com` 腳本在測試環境驗證。
+> 如果使用 Kali 等衍生發行版，請把 `Suites` 對應的版本代號替換為映射到的 Debian 代號，例如 `bookworm`。如果需要測試頻道，可將 `Components: stable` 改為 `test`。
 
-更新 APT 快取，並安裝 Docker Engine 及常用 CLI 外掛：
+更新 APT 快取，並安裝 Docker Engine 及常用 CLI 外掛。
 
 ```bash
 $ sudo apt update
