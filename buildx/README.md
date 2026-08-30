@@ -33,5 +33,5 @@ Docker Buildx 是 Docker 建立系統的重要進化，提供了高效、安全�
 ### 延伸閱讀
 
 - [Dockerfile 指令詳解](../dockerfile/README.md)：Dockerfile 編寫基礎
-- [多階段建立](../dockerfile/build_image.md)：最佳化映像檔體積
+- [多階段建立](../dockerfile/multistage_builds.md)：最佳化映像檔體積
 - [Dockerfile 最佳實務](../appendix_resources/README.md)：編寫高效 Dockerfile
