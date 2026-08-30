@@ -1,58 +1,138 @@
 ## 外部存取容器
 
-容器中可以執行一些網路應用，要讓外部也可以存取這些應用，可以通過 `-P` 或 `-p` 參數來指定連接埠映射。
+容器執行在自己的隔離網路環境中（通常是 Bridge 模式）。為了讓外部網路存取容器內的服務，我們需要將容器的埠號映射到宿主機的埠號。
 
-當使用 -P 參數時，Docker 會隨機映射一個 `49000~49900` 的連接埠到內部容器開放的網路連接埠。
+### 為什麼要映射埠號
 
-使用 `docker ps` 可以看到，本地主機的 49155 被映射到了容器的 5000 連接埠。此時連結本機的 49155 連接埠即可連結容器內 web 應用提供的介面。
-```bash
-$ sudo docker run -d -P training/webapp python app.py
-$ sudo docker ps -l
-CONTAINER ID  IMAGE                   COMMAND       CREATED        STATUS        PORTS                    NAMES
-bc533791f3f5  training/webapp:latest  python app.py 5 seconds ago  Up 2 seconds  0.0.0.0:49155->5000/tcp  nostalgic_morse
+容器的網路存取規則如下：
+
+- **容器之間**：可以透過 IP 或容器名（自訂網路）互通。
+- **宿主機存取容器**：原生 Linux 環境下可按網路設定存取容器 IP；Docker Desktop 上不能依賴容器 IP，應透過埠號映射、容器名（容器間）或 `host.docker.internal` 等機制存取。
+- **外部網路存取容器**：❌ 預設無法直接存取。
+
+為了讓外部（如你的瀏覽器、其他區域網路機器）存取容器內的服務，我們需要將容器的埠號 **映射** 到宿主機的埠號。
+
+```mermaid
+flowchart TD
+    User["外部使用者 (Browser)"] --> Host["宿主機 (localhost:8080)"]
+    Host --> Proxy["Docker Proxy<br/>埠號映射 (8080 -> 80)"]
+    Proxy --> Container["容器 (埠號: 80)"]
 ```
-同樣的，可以透過 `docker logs` 命令來查看應用的訊息。
+---
+
+### 埠號映射方式
+
+Docker 提供了多種方式來指定埠號映射。
+
+#### 1. 指定映射
+
+使用 `-p <宿主機埠號>:<容器埠號>` 格式：
+
 ```bash
-$ sudo docker logs -f nostalgic_morse
-* Running on http://0.0.0.0:5000/
-10.0.2.2 - - [23/May/2014 20:16:31] "GET / HTTP/1.1" 200 -
-10.0.2.2 - - [23/May/2014 20:16:31] "GET /favicon.ico HTTP/1.1" 404 -
+## 將宿主機的 8080 埠號映射到容器的 80 埠號
+
+$ docker run -d -p 8080:80 nginx
+```
+此時存取 `http://localhost:8080` 即可看到 Nginx 頁面。
+
+**多種格式**：
+
+| 格式 | 含義 | 範例 |
+|------|------|------|
+| `ip:hostPort:containerPort` | 綁定指定 IP 的特定埠號 | `-p 127.0.0.1:8080:80`（僅 IPv4 本機存取）|
+| `ip::containerPort` | 綁定指定 IP 的隨機埠號 | `-p 127.0.0.1::80` |
+| `hostPort:containerPort` | 綁定所有位址（通常包括 `0.0.0.0` 和 `[::]`）的特定埠號 | `-p 8080:80`（預設）|
+| `containerPort` | 綁定所有位址的隨機埠號 | `-p 80` |
+
+#### 2. 隨機映射
+
+如果不關心宿主機使用哪個埠號，可以使用隨機映射。使用 `-P`（大寫）參數，Docker 會把 Dockerfile 中 `EXPOSE` 指令暴露的所有埠號發布到宿主機的隨機高位埠號。具體落在哪個埠號，取決於宿主機目前可用的臨時埠號範圍。
+
+```bash
+$ docker run -d -P nginx
+```
+查看映射結果：
+
+```bash
+$ docker ps
+CONTAINER ID   PORTS
+abc123456      0.0.0.0:49153->80/tcp
+```
+此時 Nginx 被映射到了宿主機的一個隨機高位埠號，例如 `49153`。
+
+---
+
+### 查看埠號映射
+
+可以使用以下命令查看容器的埠號映射：
+
+#### docker port
+
+執行 `docker port` 可以查看到指定容器的埠號映射情況：
+
+```bash
+$ docker port mycontainer
+80/tcp -> 0.0.0.0:8080
+80/tcp -> [::]:8080
 ```
 
--p（小寫的）則可以指定要映射的連接埠，並且在一個指定連接埠上只可以綁定一個容器。支援的格式有 `ip:hostPort:containerPort | ip::containerPort | hostPort:containerPort`。
+#### docker ps
 
-### 映射所有遠端位址
-使用 `hostPort:containerPort` 格式本地的 5000 連接埠映射到容器的 5000 連接埠，可以執行
-```bash
-$ sudo docker run -d -p 5000:5000 training/webapp python app.py
-```
-此時預設會綁定本地所有遠端上的所有位址。
+執行 `docker ps` 可以查看到所有容器的埠號映射列表：
 
-### 映射到指定位址的指定連接埠
-可以使用 `ip:hostPort:containerPort` 格式指定映射使用一個特定位址，比如 localhost 位址 127.0.0.1
 ```bash
-$ sudo docker run -d -p 127.0.0.1:5000:5000 training/webapp python app.py
+$ docker ps
+CONTAINER ID   IMAGE     PORTS                  NAMES
+abc123456      nginx     0.0.0.0:8080->80/tcp   web
 ```
-### 映射到指定位址的任意連接埠
-使用 `ip::containerPort` 綁定 localhost 的任意連接埠到容器的 5000 連接埠，本地主機會自動分配一個連接埠。
-```bash
-$ sudo docker run -d -p 127.0.0.1::5000 training/webapp python app.py
-```
-還可以使用 udp 標記來指定 udp 連接埠
-```
-$ sudo docker run -d -p 127.0.0.1:5000:5000/udp training/webapp python app.py
-```
-### 查看映射連接埠配置
-使用 `docker port` 來查看當前映射的連接埠配置，也可以查看到綁定的位址
-```bash
-$ docker port nostalgic_morse 5000
-127.0.0.1:49155.
-```
-注意：
-* 容器有自己的內部網路和 ip 位址（使用 `docker inspect` 可以獲取所有的變數，Docker 還可以有一個可變的網路設定。）
-* -p 標記可以多次使用來綁定多個連接埠
+---
 
-例如
+### 最佳實踐與安全
+
+在設定埠號映射時，需要注意以下安全事項：
+
+#### 1. 限制監聽 IP
+
+預設情況下，`-p 8080:80` 會監聽所有可用位址，常見輸出包括 `0.0.0.0:8080` 和 `[::]:8080`。這意味著任何人只要能連接你的宿主機 IP，就能存取該服務。
+
+如果不希望對外暴露（例如資料庫服務），應綁定到回環位址。IPv4 使用 `127.0.0.1`，IPv6 使用 `[::1]`：
+
 ```bash
-$ sudo docker run -d -p 5000:5000  -p 3000:80 training/webapp python app.py
+## 僅允許本機存取
+
+$ docker run -d -p 127.0.0.1:3306:3306 mysql
+$ docker run -d -p '[::1]:3306:3306' mysql
 ```
+
+#### 2. 避免埠號衝突
+
+如果宿主機 8080 已經被佔用了，容器將無法啟動。
+
+**解決**：
+
+- 更換宿主機埠號：`-p 8081:80`
+- 讓 Docker 自動分配：`-p 80`
+
+#### 3. UDP 映射
+
+預設是 TCP 協定。如果要映射 UDP 服務（如 DNS，Syslog）：
+
+```bash
+$ docker run -d -p 53:53/udp dns-server
+```
+---
+
+### 實作原理
+
+Docker 使用 `docker-proxy` 程式（使用者態）或 `iptables` DNAT 規則（核心態）來實作埠號轉發。
+
+當流量到達宿主機埠號時，iptables 規則將其目標位址修改為容器 IP 並轉發：
+
+```bash
+## 簡化的 iptables 邏輯
+
+iptables -t nat -A DOCKER -p tcp --dport 8080 -j DNAT --to-destination 172.17.0.2:80
+```
+這也是為什麼你在容器內部看到的存取來源 IP 通常是閘道 IP（如 172.17.0.1），而不是真實的外部 Client IP（除非使用 host 網路模式）。
+
+---
