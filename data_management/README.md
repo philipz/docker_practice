@@ -41,6 +41,4 @@ Docker 資料掛載類型示意圖
 - [Union 檔案系統](../underly/ufs.md)：Docker 儲存的底層原理
 - [Compose 模板檔案](../compose/compose_file.md)：Compose 中的掛載設定
 
-## 既有 philipz 內容補充
 
-本章保留 philipz 特有的「資料卷容器」主題，見 [資料卷容器](container.md)。此主題上游已移除，僅在 philipz 版保留。
