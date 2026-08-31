@@ -83,4 +83,3 @@ Loaded image: alpine:latest
 docker save <映像檔名> | bzip2 | pv | ssh <使用者名稱>@<主機名> 'cat | docker load'
 ```
 
-> **註**：本節的儲存與載入可另見[儲存和載入映像檔](save_load.md)一節 philipz 特有的實作說明。
