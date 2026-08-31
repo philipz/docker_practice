@@ -1,8 +1,8 @@
 ## 如何貢獻
 
-領取或建立新的 [Issue](https://github.com/yeasy/docker_practice/issues)，如 [issue 235](https://github.com/yeasy/docker_practice/issues/235)，新增自己為 `Assignee`。
+領取或建立新的 [Issue](https://github.com/philipz/docker_practice/issues)，如 [issue 235](https://github.com/philipz/docker_practice/issues/235)，新增自己為 `Assignee`。
 
-在 [GitHub](https://github.com/yeasy/docker_practice/fork) 上 `fork` 到自己的倉庫，如 `docker_user/docker_practice`，然後 `clone` 到本地，並設定使用者資訊。
+在 [GitHub](https://github.com/philipz/docker_practice/fork) 上 `fork` 到自己的倉庫，如 `docker_user/docker_practice`，然後 `clone` 到本地，並設定使用者資訊。
 
 ```bash
 $ git clone git@github.com:docker_user/docker_practice.git
@@ -20,12 +20,12 @@ $ git commit -a -s
 
 $ git push
 ```
-在 [GitHub](https://github.com/yeasy/docker_practice/pulls) 上提交 `Pull Request`，新增標籤，並邀請維護者進行 `Review`。
+在 [GitHub](https://github.com/philipz/docker_practice/pulls) 上提交 `Pull Request`，新增標籤，並邀請維護者進行 `Review`。
 
 定期使用專案倉庫內容更新自己倉庫內容。
 
 ```bash
-$ git remote add upstream https://github.com/yeasy/docker_practice
+$ git remote add upstream https://github.com/philipz/docker_practice
 
 $ git fetch upstream
 
